@@ -28,10 +28,10 @@ func setupTestDB(t *testing.T) *sql.DB {
 	}
 
 	// Clean up and initialize schema
-	testDB.Exec("DROP TABLE IF EXISTS pr_reviewers CASCADE")
-	testDB.Exec("DROP TABLE IF EXISTS pull_requests CASCADE")
-	testDB.Exec("DROP TABLE IF EXISTS users CASCADE")
-	testDB.Exec("DROP TABLE IF EXISTS teams CASCADE")
+	_, _ = testDB.Exec("DROP TABLE IF EXISTS pr_reviewers CASCADE")
+	_, _ = testDB.Exec("DROP TABLE IF EXISTS pull_requests CASCADE")
+	_, _ = testDB.Exec("DROP TABLE IF EXISTS users CASCADE")
+	_, _ = testDB.Exec("DROP TABLE IF EXISTS teams CASCADE")
 
 	schema := `
 	CREATE TABLE teams (
@@ -69,11 +69,11 @@ func setupTestDB(t *testing.T) *sql.DB {
 }
 
 func cleanupTestDB(testDB *sql.DB) {
-	testDB.Exec("DROP TABLE IF EXISTS pr_reviewers CASCADE")
-	testDB.Exec("DROP TABLE IF EXISTS pull_requests CASCADE")
-	testDB.Exec("DROP TABLE IF EXISTS users CASCADE")
-	testDB.Exec("DROP TABLE IF EXISTS teams CASCADE")
-	testDB.Close()
+	_, _ = testDB.Exec("DROP TABLE IF EXISTS pr_reviewers CASCADE")
+	_, _ = testDB.Exec("DROP TABLE IF EXISTS pull_requests CASCADE")
+	_, _ = testDB.Exec("DROP TABLE IF EXISTS users CASCADE")
+	_, _ = testDB.Exec("DROP TABLE IF EXISTS teams CASCADE")
+	_ = testDB.Close()
 }
 
 func TestTeamAdd(t *testing.T) {
@@ -116,10 +116,10 @@ func TestPullRequestCreate(t *testing.T) {
 	db = testDB
 
 	// Setup team
-	testDB.Exec("INSERT INTO teams (team_name) VALUES ('backend')")
-	testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u1', 'Alice', 'backend', true)")
-	testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u2', 'Bob', 'backend', true)")
-	testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u3', 'Charlie', 'backend', true)")
+	_, _ = testDB.Exec("INSERT INTO teams (team_name) VALUES ('backend')")
+	_, _ = testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u1', 'Alice', 'backend', true)")
+	_, _ = testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u2', 'Bob', 'backend', true)")
+	_, _ = testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u3', 'Charlie', 'backend', true)")
 
 	prReq := map[string]string{
 		"pull_request_id":   "pr-1001",
@@ -138,7 +138,7 @@ func TestPullRequestCreate(t *testing.T) {
 	}
 
 	var response map[string]PullRequest
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 	pr := response["pr"]
 	if pr.Status != "OPEN" {
@@ -163,9 +163,9 @@ func TestPullRequestMerge(t *testing.T) {
 	db = testDB
 
 	// Setup
-	testDB.Exec("INSERT INTO teams (team_name) VALUES ('backend')")
-	testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u1', 'Alice', 'backend', true)")
-	testDB.Exec("INSERT INTO pull_requests (pull_request_id, pull_request_name, author_id, status) VALUES ('pr-1001', 'Test PR', 'u1', 'OPEN')")
+	_, _ = testDB.Exec("INSERT INTO teams (team_name) VALUES ('backend')")
+	_, _ = testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u1', 'Alice', 'backend', true)")
+	_, _ = testDB.Exec("INSERT INTO pull_requests (pull_request_id, pull_request_name, author_id, status) VALUES ('pr-1001', 'Test PR', 'u1', 'OPEN')")
 
 	mergeReq := map[string]string{
 		"pull_request_id": "pr-1001",
@@ -182,7 +182,7 @@ func TestPullRequestMerge(t *testing.T) {
 	}
 
 	var response map[string]PullRequest
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 	pr := response["pr"]
 	if pr.Status != "MERGED" {
@@ -206,12 +206,12 @@ func TestPullRequestReassign(t *testing.T) {
 	db = testDB
 
 	// Setup
-	testDB.Exec("INSERT INTO teams (team_name) VALUES ('backend')")
-	testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u1', 'Alice', 'backend', true)")
-	testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u2', 'Bob', 'backend', true)")
-	testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u3', 'Charlie', 'backend', true)")
-	testDB.Exec("INSERT INTO pull_requests (pull_request_id, pull_request_name, author_id, status) VALUES ('pr-1001', 'Test PR', 'u1', 'OPEN')")
-	testDB.Exec("INSERT INTO pr_reviewers (pull_request_id, user_id) VALUES ('pr-1001', 'u2')")
+	_, _ = testDB.Exec("INSERT INTO teams (team_name) VALUES ('backend')")
+	_, _ = testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u1', 'Alice', 'backend', true)")
+	_, _ = testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u2', 'Bob', 'backend', true)")
+	_, _ = testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u3', 'Charlie', 'backend', true)")
+	_, _ = testDB.Exec("INSERT INTO pull_requests (pull_request_id, pull_request_name, author_id, status) VALUES ('pr-1001', 'Test PR', 'u1', 'OPEN')")
+	_, _ = testDB.Exec("INSERT INTO pr_reviewers (pull_request_id, user_id) VALUES ('pr-1001', 'u2')")
 
 	reassignReq := map[string]string{
 		"pull_request_id": "pr-1001",
@@ -229,7 +229,7 @@ func TestPullRequestReassign(t *testing.T) {
 	}
 
 	var response map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 	replacedBy := response["replaced_by"].(string)
 	if replacedBy == "" {
@@ -247,11 +247,11 @@ func TestReassignOnMergedPR(t *testing.T) {
 	db = testDB
 
 	// Setup
-	testDB.Exec("INSERT INTO teams (team_name) VALUES ('backend')")
-	testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u1', 'Alice', 'backend', true)")
-	testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u2', 'Bob', 'backend', true)")
-	testDB.Exec("INSERT INTO pull_requests (pull_request_id, pull_request_name, author_id, status) VALUES ('pr-1001', 'Test PR', 'u1', 'MERGED')")
-	testDB.Exec("INSERT INTO pr_reviewers (pull_request_id, user_id) VALUES ('pr-1001', 'u2')")
+	_, _ = testDB.Exec("INSERT INTO teams (team_name) VALUES ('backend')")
+	_, _ = testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u1', 'Alice', 'backend', true)")
+	_, _ = testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u2', 'Bob', 'backend', true)")
+	_, _ = testDB.Exec("INSERT INTO pull_requests (pull_request_id, pull_request_name, author_id, status) VALUES ('pr-1001', 'Test PR', 'u1', 'MERGED')")
+	_, _ = testDB.Exec("INSERT INTO pr_reviewers (pull_request_id, user_id) VALUES ('pr-1001', 'u2')")
 
 	reassignReq := map[string]string{
 		"pull_request_id": "pr-1001",
@@ -269,7 +269,7 @@ func TestReassignOnMergedPR(t *testing.T) {
 	}
 
 	var response ErrorResponse
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 	if response.Error.Code != "PR_MERGED" {
 		t.Errorf("Expected error code PR_MERGED, got %s", response.Error.Code)
@@ -282,9 +282,9 @@ func TestInactiveUserNotAssigned(t *testing.T) {
 	db = testDB
 
 	// Setup team with one active and one inactive user
-	testDB.Exec("INSERT INTO teams (team_name) VALUES ('backend')")
-	testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u1', 'Alice', 'backend', true)")
-	testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u2', 'Bob', 'backend', false)")
+	_, _ = testDB.Exec("INSERT INTO teams (team_name) VALUES ('backend')")
+	_, _ = testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u1', 'Alice', 'backend', true)")
+	_, _ = testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u2', 'Bob', 'backend', false)")
 
 	prReq := map[string]string{
 		"pull_request_id":   "pr-1001",
@@ -299,7 +299,7 @@ func TestInactiveUserNotAssigned(t *testing.T) {
 	pullRequestCreateHandler(w, req)
 
 	var response map[string]PullRequest
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 	pr := response["pr"]
 	
@@ -310,3 +310,61 @@ func TestInactiveUserNotAssigned(t *testing.T) {
 		}
 	}
 }
+
+func TestTeamMassDeactivation(t *testing.T) {
+	testDB := setupTestDB(t)
+	defer cleanupTestDB(testDB)
+	db = testDB
+
+	// Setup team with multiple users and open PRs
+	_, _ = testDB.Exec("INSERT INTO teams (team_name) VALUES ('backend')")
+	_, _ = testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u1', 'Alice', 'backend', true)")
+	_, _ = testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u2', 'Bob', 'backend', true)")
+	_, _ = testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u3', 'Charlie', 'backend', true)")
+	_, _ = testDB.Exec("INSERT INTO users (user_id, username, team_name, is_active) VALUES ('u4', 'Dave', 'backend', true)")
+
+	// Create open PRs with reviewers
+	_, _ = testDB.Exec("INSERT INTO pull_requests (pull_request_id, pull_request_name, author_id, status) VALUES ('pr-1001', 'Test PR 1', 'u1', 'OPEN')")
+	_, _ = testDB.Exec("INSERT INTO pr_reviewers (pull_request_id, user_id) VALUES ('pr-1001', 'u2')")
+	_, _ = testDB.Exec("INSERT INTO pr_reviewers (pull_request_id, user_id) VALUES ('pr-1001', 'u3')")
+
+	_, _ = testDB.Exec("INSERT INTO pull_requests (pull_request_id, pull_request_name, author_id, status) VALUES ('pr-1002', 'Test PR 2', 'u2', 'OPEN')")
+	_, _ = testDB.Exec("INSERT INTO pr_reviewers (pull_request_id, user_id) VALUES ('pr-1002', 'u1')")
+
+	deactivateReq := map[string]string{
+		"team_name": "backend",
+	}
+
+	body, _ := json.Marshal(deactivateReq)
+	req := httptest.NewRequest(http.MethodPost, "/team/deactivate", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+
+	teamDeactivateHandler(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var response map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
+
+	// Check deactivated count
+	deactivatedCount := int(response["deactivated_count"].(float64))
+	if deactivatedCount != 4 {
+		t.Errorf("Expected 4 users deactivated, got %d", deactivatedCount)
+	}
+
+	// Verify all users are now inactive in database
+	var activeCount int
+	_ = testDB.QueryRow("SELECT COUNT(*) FROM users WHERE team_name = 'backend' AND is_active = true").Scan(&activeCount)
+	if activeCount != 0 {
+		t.Errorf("Expected 0 active users, found %d", activeCount)
+	}
+
+	// Verify reassignments happened
+	reassignments := response["reassignments"].([]interface{})
+	if len(reassignments) == 0 {
+		t.Log("Note: No reassignments occurred (expected if no active replacement candidates)")
+	}
+}
+

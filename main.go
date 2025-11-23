@@ -1,11 +1,14 @@
+// Package main implements a Pull Request review management system API.
+// It provides endpoints for managing teams, users, and pull request reviews with automatic reviewer assignment.
 package main
 
 import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"crypto/rand"
 	"log"
-	"math/rand"
+	"math/big"
 	"net/http"
 	"os"
 	"time"
@@ -80,7 +83,11 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("Error closing database: %v", err)
+		}
+	}()
 
 	// Initialize database schema
 	initDB()
@@ -97,9 +104,18 @@ func main() {
 	// Bonus endpoints
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/stats", statsHandler)
+	http.HandleFunc("/team/deactivate", teamDeactivateHandler)
 
 	log.Println("Server starting on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	
+	// Create server with timeouts for security
+	server := &http.Server{
+		Addr:         ":8080",
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+	log.Fatal(server.ListenAndServe())
 }
 
 func initDB() {
@@ -185,7 +201,9 @@ func teamAddHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{"team": team})
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"team": team}); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 func teamGetHandler(w http.ResponseWriter, r *http.Request) {
@@ -219,7 +237,11 @@ func teamGetHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("Error closing rows: %v", err)
+		}
+	}()
 
 	var members []TeamMember
 	for rows.Next() {
@@ -237,7 +259,9 @@ func teamGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(team)
+	if err := json.NewEncoder(w).Encode(team); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 func usersSetIsActiveHandler(w http.ResponseWriter, r *http.Request) {
@@ -279,7 +303,9 @@ func usersSetIsActiveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"user": user})
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"user": user}); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 func pullRequestCreateHandler(w http.ResponseWriter, r *http.Request) {
@@ -363,7 +389,9 @@ func pullRequestCreateHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{"pr": pr})
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"pr": pr}); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 func pullRequestMergeHandler(w http.ResponseWriter, r *http.Request) {
@@ -398,7 +426,9 @@ func pullRequestMergeHandler(w http.ResponseWriter, r *http.Request) {
 	if status == "MERGED" {
 		pr := getPullRequest(req.PullRequestID)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"pr": pr})
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{"pr": pr}); err != nil {
+			log.Printf("Error encoding response: %v", err)
+		}
 		return
 	}
 
@@ -412,7 +442,9 @@ func pullRequestMergeHandler(w http.ResponseWriter, r *http.Request) {
 
 	pr := getPullRequest(req.PullRequestID)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"pr": pr})
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"pr": pr}); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 func pullRequestReassignHandler(w http.ResponseWriter, r *http.Request) {
@@ -489,8 +521,12 @@ func pullRequestReassignHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Randomly select a new reviewer
-	newReviewerID := candidates[rand.Intn(len(candidates))]
+	// Randomly select a new reviewer using crypto/rand for security
+	newReviewerID, err := selectRandomCandidate(candidates)
+	if err != nil {
+		http.Error(w, "Failed to select reviewer", http.StatusInternalServerError)
+		return
+	}
 
 	// Replace reviewer
 	_, err = db.Exec("UPDATE pr_reviewers SET user_id = $1 WHERE pull_request_id = $2 AND user_id = $3", newReviewerID, req.PullRequestID, req.OldUserID)
@@ -501,10 +537,12 @@ func pullRequestReassignHandler(w http.ResponseWriter, r *http.Request) {
 
 	pr := getPullRequest(req.PullRequestID)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"pr":          pr,
 		"replaced_by": newReviewerID,
-	})
+	}); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 func usersGetReviewHandler(w http.ResponseWriter, r *http.Request) {
@@ -530,7 +568,11 @@ func usersGetReviewHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("Error closing rows: %v", err)
+		}
+	}()
 
 	var pullRequests []PullRequestShort
 	for rows.Next() {
@@ -547,10 +589,12 @@ func usersGetReviewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"user_id":       userID,
 		"pull_requests": pullRequests,
-	})
+	}); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 // Bonus endpoints
@@ -565,17 +609,21 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	if err := db.Ping(); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		if encodeErr := json.NewEncoder(w).Encode(map[string]interface{}{
 			"status": "unhealthy",
 			"error":  err.Error(),
-		})
+		}); encodeErr != nil {
+			log.Printf("Error encoding response: %v", encodeErr)
+		}
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"status": "healthy",
-	})
+	}); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 func statsHandler(w http.ResponseWriter, r *http.Request) {
@@ -606,12 +654,24 @@ func statsHandler(w http.ResponseWriter, r *http.Request) {
 	var stats Stats
 
 	// Get totals
-	db.QueryRow("SELECT COUNT(*) FROM teams").Scan(&stats.TotalTeams)
-	db.QueryRow("SELECT COUNT(*) FROM users").Scan(&stats.TotalUsers)
-	db.QueryRow("SELECT COUNT(*) FROM users WHERE is_active = true").Scan(&stats.ActiveUsers)
-	db.QueryRow("SELECT COUNT(*) FROM pull_requests").Scan(&stats.TotalPRs)
-	db.QueryRow("SELECT COUNT(*) FROM pull_requests WHERE status = 'OPEN'").Scan(&stats.OpenPRs)
-	db.QueryRow("SELECT COUNT(*) FROM pull_requests WHERE status = 'MERGED'").Scan(&stats.MergedPRs)
+	if err := db.QueryRow("SELECT COUNT(*) FROM teams").Scan(&stats.TotalTeams); err != nil {
+		log.Printf("Error getting total teams: %v", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&stats.TotalUsers); err != nil {
+		log.Printf("Error getting total users: %v", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM users WHERE is_active = true").Scan(&stats.ActiveUsers); err != nil {
+		log.Printf("Error getting active users: %v", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM pull_requests").Scan(&stats.TotalPRs); err != nil {
+		log.Printf("Error getting total PRs: %v", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM pull_requests WHERE status = 'OPEN'").Scan(&stats.OpenPRs); err != nil {
+		log.Printf("Error getting open PRs: %v", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM pull_requests WHERE status = 'MERGED'").Scan(&stats.MergedPRs); err != nil {
+		log.Printf("Error getting merged PRs: %v", err)
+	}
 
 	// Get top reviewers
 	rows, err := db.Query(`
@@ -631,10 +691,17 @@ func statsHandler(w http.ResponseWriter, r *http.Request) {
 		LIMIT 10
 	`)
 	if err == nil {
-		defer rows.Close()
+		defer func() {
+			if err := rows.Close(); err != nil {
+				log.Printf("Error closing rows: %v", err)
+			}
+		}()
 		for rows.Next() {
 			var us UserStats
-			rows.Scan(&us.UserID, &us.Username, &us.ReviewCount, &us.AuthoredPRs, &us.OpenReviews, &us.MergedReviews)
+			if err := rows.Scan(&us.UserID, &us.Username, &us.ReviewCount, &us.AuthoredPRs, &us.OpenReviews, &us.MergedReviews); err != nil {
+				log.Printf("Error scanning user stats: %v", err)
+				continue
+			}
 			stats.TopReviewers = append(stats.TopReviewers, us)
 		}
 	}
@@ -644,7 +711,210 @@ func statsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	if err := json.NewEncoder(w).Encode(stats); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
+// teamDeactivateHandler handles mass deactivation of team members and reassigns their open PRs
+func teamDeactivateHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		TeamName string `json:"team_name"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Check if team exists
+	var exists bool
+	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM teams WHERE team_name = $1)", req.TeamName).Scan(&exists)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if !exists {
+		sendError(w, http.StatusNotFound, "NOT_FOUND", "team not found")
+		return
+	}
+
+	// Start transaction for atomicity
+	tx, err := db.Begin()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer func() {
+		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
+			log.Printf("Error rolling back transaction: %v", err)
+		}
+	}()
+
+	// Get all active users in the team
+	rows, err := tx.Query("SELECT user_id FROM users WHERE team_name = $1 AND is_active = true", req.TeamName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("Error closing rows: %v", err)
+		}
+	}()
+
+	var usersToDeactivate []string
+	for rows.Next() {
+		var userID string
+		if err := rows.Scan(&userID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		usersToDeactivate = append(usersToDeactivate, userID)
+	}
+
+	// Track reassignments for response
+	type Reassignment struct {
+		PRID        string `json:"pr_id"`
+		OldReviewer string `json:"old_reviewer"`
+		NewReviewer string `json:"new_reviewer"`
+	}
+	var reassignments []Reassignment
+	var failedReassignments []string
+
+	// Process each user's open PR reviews
+	for _, userID := range usersToDeactivate {
+		// Get all OPEN PRs where this user is a reviewer
+		prRows, err := tx.Query(`
+			SELECT pr.pull_request_id, pr.author_id
+			FROM pull_requests pr
+			JOIN pr_reviewers r ON pr.pull_request_id = r.pull_request_id
+			WHERE r.user_id = $1 AND pr.status = 'OPEN'
+		`, userID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		
+		var prsToReassign []struct {
+			PRID     string
+			AuthorID string
+		}
+		func() {
+			defer func() {
+				if err := prRows.Close(); err != nil {
+					log.Printf("Error closing rows: %v", err)
+				}
+			}()
+
+			for prRows.Next() {
+				var pr struct {
+					PRID     string
+					AuthorID string
+				}
+				if err := prRows.Scan(&pr.PRID, &pr.AuthorID); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				prsToReassign = append(prsToReassign, pr)
+			}
+		}()
+
+		// Reassign each PR
+		for _, pr := range prsToReassign {
+			// Get current reviewers for this PR
+			var currentReviewers []string
+			func() {
+				revRows, err := tx.Query("SELECT user_id FROM pr_reviewers WHERE pull_request_id = $1", pr.PRID)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				defer func() {
+					if err := revRows.Close(); err != nil {
+						log.Printf("Error closing rows: %v", err)
+					}
+				}()
+
+				for revRows.Next() {
+					var revID string
+					if err := revRows.Scan(&revID); err != nil {
+						http.Error(w, err.Error(), http.StatusInternalServerError)
+						return
+					}
+					currentReviewers = append(currentReviewers, revID)
+				}
+			}()
+
+			// Find replacement from the same team (excluding current reviewers and author)
+			excludeList := append(currentReviewers, pr.AuthorID)
+			
+			// Build query to find active replacement from same team
+			query := `SELECT user_id FROM users 
+				WHERE team_name = $1 AND is_active = true AND user_id != ALL($2)
+				LIMIT 1`
+			
+			var newReviewerID string
+			err = tx.QueryRow(query, req.TeamName, excludeList).Scan(&newReviewerID)
+			
+			if err == sql.ErrNoRows {
+				// No replacement available - just remove the reviewer
+				_, err = tx.Exec("DELETE FROM pr_reviewers WHERE pull_request_id = $1 AND user_id = $2", pr.PRID, userID)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				failedReassignments = append(failedReassignments, pr.PRID)
+			} else if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			} else {
+				// Replace the reviewer
+				_, err = tx.Exec("UPDATE pr_reviewers SET user_id = $1 WHERE pull_request_id = $2 AND user_id = $3", 
+					newReviewerID, pr.PRID, userID)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				reassignments = append(reassignments, Reassignment{
+					PRID:        pr.PRID,
+					OldReviewer: userID,
+					NewReviewer: newReviewerID,
+				})
+			}
+		}
+	}
+
+	// Deactivate all users in the team
+	result, err := tx.Exec("UPDATE users SET is_active = false WHERE team_name = $1", req.TeamName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	deactivatedCount, _ := result.RowsAffected()
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"team_name":             req.TeamName,
+		"deactivated_count":     deactivatedCount,
+		"reassignments":         reassignments,
+		"failed_reassignments":  failedReassignments,
+	}); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
 }
 
 // Helper functions
@@ -655,7 +925,9 @@ func sendError(w http.ResponseWriter, statusCode int, code, message string) {
 	var errResp ErrorResponse
 	errResp.Error.Code = code
 	errResp.Error.Message = message
-	json.NewEncoder(w).Encode(errResp)
+	if err := json.NewEncoder(w).Encode(errResp); err != nil {
+		log.Printf("Error encoding error response: %v", err)
+	}
 }
 
 func getActiveTeamMembers(teamName, excludeUserID string) []string {
@@ -663,7 +935,11 @@ func getActiveTeamMembers(teamName, excludeUserID string) []string {
 	if err != nil {
 		return []string{}
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("Error closing rows: %v", err)
+		}
+	}()
 
 	var members []string
 	for rows.Next() {
@@ -682,7 +958,11 @@ func getActiveTeamMembersExcluding(teamName string, excludeUserIDs []string) []s
 		if err != nil {
 			return []string{}
 		}
-		defer rows.Close()
+		defer func() {
+			if err := rows.Close(); err != nil {
+				log.Printf("Error closing rows: %v", err)
+			}
+		}()
 
 		var members []string
 		for rows.Next() {
@@ -711,7 +991,11 @@ func getActiveTeamMembersExcluding(teamName string, excludeUserIDs []string) []s
 	if err != nil {
 		return []string{}
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("Error closing rows: %v", err)
+		}
+	}()
 
 	var members []string
 	for rows.Next() {
@@ -729,14 +1013,34 @@ func assignReviewers(candidates []string, maxCount int) []string {
 		return candidates
 	}
 
-	// Shuffle and take first maxCount
+	// Shuffle and take first maxCount using crypto/rand
 	shuffled := make([]string, len(candidates))
 	copy(shuffled, candidates)
-	rand.Shuffle(len(shuffled), func(i, j int) {
+	
+	// Fisher-Yates shuffle with crypto/rand
+	for i := len(shuffled) - 1; i > 0; i-- {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
+		if err != nil {
+			log.Printf("Error generating random number: %v", err)
+			continue
+		}
+		j := n.Int64()
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
-	})
+	}
 
 	return shuffled[:maxCount]
+}
+
+// selectRandomCandidate selects a random candidate using crypto/rand for security
+func selectRandomCandidate(candidates []string) (string, error) {
+	if len(candidates) == 0 {
+		return "", fmt.Errorf("no candidates available")
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(len(candidates))))
+	if err != nil {
+		return "", err
+	}
+	return candidates[n.Int64()], nil
 }
 
 func getCurrentReviewers(prID string) []string {
@@ -744,7 +1048,11 @@ func getCurrentReviewers(prID string) []string {
 	if err != nil {
 		return []string{}
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("Error closing rows: %v", err)
+		}
+	}()
 
 	var reviewers []string
 	for rows.Next() {

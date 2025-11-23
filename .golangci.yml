@@ -1,6 +1,6 @@
 # golangci-lint configuration
 # https://golangci-lint.run/usage/configuration/
-
+version: 2
 run:
   timeout: 5m
   tests: true
@@ -9,14 +9,10 @@ run:
 linters:
   enable:
     - errcheck       # Проверка необработанных ошибок
-    - gosimple       # Упрощение кода
     - govet          # Стандартная проверка go vet
     - ineffassign    # Обнаружение неиспользуемых присваиваний
     - staticcheck    # Статический анализ кода
     - unused         # Обнаружение неиспользуемого кода
-    - typecheck      # Проверка типов
-    - gofmt          # Проверка форматирования
-    - goimports      # Проверка импортов
     - misspell       # Проверка орфографии
     - revive         # Быстрый линтер для Go
     - gosec          # Проверка безопасности

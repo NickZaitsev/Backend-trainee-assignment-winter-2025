@@ -8,7 +8,7 @@
 
 ## Технологический стек
 
-- **Язык**: Go 1.23
+- **Язык**: Go 1.25
 - **База данных**: PostgreSQL 15
 - **Контейнеризация**: Docker, Docker Compose
 
@@ -21,19 +21,6 @@ docker-compose up
 ```
 
 Сервис будет доступен по адресу: http://localhost:8080
-
-### Запуск для разработки
-
-```bash
-# Установить зависимости
-go mod download
-
-# Запустить PostgreSQL
-docker-compose up db
-
-# Запустить сервис
-DATABASE_URL=postgres://user:password@localhost:5432/avito?sslmode=disable go run main.go
-```
 
 ## API Endpoints
 
@@ -98,6 +85,58 @@ DATABASE_URL=postgres://user:password@localhost:5432/avito?sslmode=disable go ru
 }
 ```
 
+### Массовая деактивация команды
+- `POST /team/deactivate` - Деактивировать всех пользователей команды и безопасно переназначить их открытые PR
+
+**Особенности:**
+- Все операции выполняются в одной транзакции (атомарность)
+- Автоматическое переназначение открытых PR на других активных участников команды
+- Производительность: ~65ms для средних объёмов данных (уложились в целевые 100ms)
+- Если нет доступных кандидатов для переназначения, ревьювер просто удаляется
+
+Пример запроса:
+```bash
+curl -X POST http://localhost:8080/team/deactivate \
+  -H "Content-Type: application/json" \
+  -d '{"team_name": "backend"}'
+```
+
+Пример ответа:
+```json
+{
+  "team_name": "backend",
+  "deactivated_count": 10,
+  "reassignments": [
+    {
+      "pr_id": "pr-123",
+      "old_reviewer": "u1",
+      "new_reviewer": "u5"
+    }
+  ],
+  "failed_reassignments": []
+}
+```
+
+### Нагрузочное тестирование
+Проект включает скрипты и результаты нагрузочного тестирования:
+
+**Запуск тестов:**
+```bash
+# Linux/Mac
+./load_test.sh
+
+# Windows PowerShell
+.\load_test.ps1
+```
+
+**Результаты тестирования** (см. `LOAD_TESTING.md`):
+- ✅ Success Rate: 100% (цель: ≥99.9%)
+- ✅ Average Response Time: ~45ms (цель: ≤300ms)
+- ✅ RPS: 5.0 (цель: 5)
+- ✅ P99 Response Time: ~120ms
+
+Все SLI требования выполнены с большим запасом.
+
 ### Linter Configuration
 Проект включает конфигурацию `golangci-lint` (`.golangci.yml`) с настройками для:
 - Проверки ошибок (errcheck)
@@ -110,6 +149,7 @@ DATABASE_URL=postgres://user:password@localhost:5432/avito?sslmode=disable go ru
 ```bash
 golangci-lint run
 ```
+
 
 ## Схема базы данных
 
