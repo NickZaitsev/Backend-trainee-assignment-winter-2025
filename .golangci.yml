@@ -1,0 +1,82 @@
+# golangci-lint configuration
+# https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck       # Проверка необработанных ошибок
+    - gosimple       # Упрощение кода
+    - govet          # Стандартная проверка go vet
+    - ineffassign    # Обнаружение неиспользуемых присваиваний
+    - staticcheck    # Статический анализ кода
+    - unused         # Обнаружение неиспользуемого кода
+    - typecheck      # Проверка типов
+    - gofmt          # Проверка форматирования
+    - goimports      # Проверка импортов
+    - misspell       # Проверка орфографии
+    - revive         # Быстрый линтер для Go
+    - gosec          # Проверка безопасности
+    - unconvert      # Ненужные преобразования типов
+    - unparam        # Неиспользуемые параметры функций
+    - bodyclose      # Проверка закрытия HTTP body
+    - nilerr         # Обнаружение возврата nil error
+    - sqlclosecheck  # Проверка закрытия sql.Rows
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+    
+  govet:
+    check-shadowing: true
+    enable-all: true
+    
+  gofmt:
+    simplify: true
+    
+  revive:
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: increment-decrement
+      - name: var-naming
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: indent-error-flow
+      - name: superfluous-else
+      - name: unreachable-code
+      
+  gosec:
+    excludes:
+      - G104 # Audit errors not checked - we handle this with errcheck
+      
+  misspell:
+    locale: US
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosec
+        
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  sort-results: true
